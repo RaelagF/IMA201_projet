@@ -95,7 +95,7 @@ def SLIC(filename, k, m, threshold=0.1):
             new_C = np.average(cluster, axis=0)
             E = E + np.linalg.norm(C - new_C, ord=2)
             print (E)
-            C = new_C
+            C[:] = new_C
 
         # update error_imrovement to decide whether to stop
         error_improvement = abs(global_error - E) / global_error
@@ -108,7 +108,7 @@ def SLIC(filename, k, m, threshold=0.1):
     return l
 
 
-def show_segmentation(filename, k, m, threshold=0.001):
+def show_segmentation(filename, k, m, threshold=0.05):
     # label matrix
     l = SLIC(filename, k, m, threshold)
 
@@ -133,4 +133,4 @@ def show_segmentation(filename, k, m, threshold=0.001):
 
 # np.set_printoptions(threshold=np.inf)
 # print(SLIC("luangai.jpg", 100, 10))
-show_segmentation("lena_petit.tif", k=100, m=40)
+show_segmentation("lena_petit.tif", k=100, m=30)
