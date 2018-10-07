@@ -1,4 +1,4 @@
-#contributor: guyu guyuan
+# contributor: guyu guyuan
 
 import numpy as np
 import cv2
@@ -83,7 +83,8 @@ def SLIC(filename, k, m, threshold=0.1):
                         l[j, i] = cluster_label
 
         # updadate
-        # compute new cluster centers
+        # compute new cluster centers and residual error E
+        E = 0
         for (cluster_label, C) in enumerate(Ck):
             cluster = []
             for j in range(height):
@@ -91,15 +92,10 @@ def SLIC(filename, k, m, threshold=0.1):
                     if (l[j, i] == cluster_label):
                         tmp_vector = np.concatenate((im_Lab[j, i], [j, i]))
                         cluster.append(tmp_vector)
-            C = np.concatenate(cluster, axis=0)
-
-        # compute residual error E
-        E = 0
-        for j in range(height):
-            for i in range(weight):
-                tmp_vector = np.concatenate((im_Lab[j, i], [j, i]))
-                cluster_label = l[j, i]
-                E = E + mixed_distance(Ck[cluster_label], tmp_vector, S, m)
+            new_C = np.average(cluster, axis=0)
+            E = E + np.linalg.norm(C - new_C, ord=2)
+            print (E)
+            C = new_C
 
         # update error_imrovement to decide whether to stop
         error_improvement = abs(global_error - E) / global_error
@@ -137,4 +133,4 @@ def show_segmentation(filename, k, m, threshold=0.001):
 
 # np.set_printoptions(threshold=np.inf)
 # print(SLIC("luangai.jpg", 100, 10))
-show_segmentation("lena_petit.tif", k=100, m=10)
+show_segmentation("lena_petit.tif", k=100, m=40)
