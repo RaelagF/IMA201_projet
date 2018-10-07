@@ -136,5 +136,5 @@ def show_segmentation(filename, k, m, threshold=0.001):
 
 
 # np.set_printoptions(threshold=np.inf)
-# print(SLIC("montsouris.jpg", 100, 10))
+# print(SLIC("lena.jpg", 100, 10))
 show_segmentation("lena_petit.tif", k=100, m=10)
