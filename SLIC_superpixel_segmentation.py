@@ -1,4 +1,4 @@
-# contributor: guyu guyuan
+# contributor: FANG Guyu, GU Yuanzhe
 
 import numpy as np
 import cv2
@@ -108,9 +108,7 @@ def SLIC(filename, k, m, threshold=0.1):
     return l
 
 
-def show_segmentation(filename, k, m, threshold=0.05, show_im=False):
-    # label matrix
-    l = SLIC(filename, k, m, threshold)
+def show_segmentation(filename, savename, l, show_im=False):
 
     # turn pixels on the bords to black
     height, weight = l.shape
@@ -126,13 +124,13 @@ def show_segmentation(filename, k, m, threshold=0.05, show_im=False):
             if (l[j, i] != l[j, i-1]):
                 im[j, i, :] = [0, 0, 0]
 
-    cv2.imwrite('slic_'+str(k)+'_'+str(m)+'_'+str(threshold)+'_'+filename,im)
+    cv2.imwrite(savename, im)
     if show_im:
         cv2.namedWindow("Segmentation")
         cv2.imshow("Segmentation", im)
     cv2.waitKey(0)
     
-    return l,im
+    return im
 
 #%% class graph
 class graph:
@@ -143,27 +141,36 @@ class graph:
         #dict of graph neighbour
         self.dic_neigh = {}
         
-    #a fonction add index to index dict
+    #a fonction add content to graph
     def add_content(self, position, index):
+        #position: the position of the point
+        #index: the index of the point 
         if index in self.dic_content:
             self.dic_content[index].append(position)
         else:
             self.dic_content[index]=[position]
             self.dic_neigh[index]=[]
             
-    #a fonction add neighbour to neigh dict
+    #a fonction built connnection between two index
     def add_neigh(self, index1, index2):
-        
+        #default
         if index1 == -1 or index2 == -1 or index1 == index2:
             return
-        
+        if index1 not in self.dic_content or index2 not in self.dic_content:
+            print("Error: Index doesn't exists when adding neighbour")
+            return
+        #two-side
         if index1 not in self.dic_neigh[index2]:
             self.dic_neigh[index2].append(index1)
         if index2 not in self.dic_neigh[index1]:
             self.dic_neigh[index1].append(index2)
             
-    #a fonction combine connexe composants with different index
+    #a fonction combine connexe composants of two indexs
     def combine_index(self, index1, index2):
+        
+        if index1 not in self.dic_content or index2 not in self.dic_content:
+            print("Error: Index doesn't exists when combining")
+            return
         
         index_min, index_max = min(index1, index2), max(index1, index2)
         
@@ -197,12 +204,14 @@ class graph:
                     res = index
                     index += 1
                 
+                #add the point to the graph
                 self.add_content([i,j],res)
                 label[i][j]=res
                 self.add_neigh(res,label[i][j-1])
                 self.add_neigh(res,label[i-1][j])
                 
                 if slic[i][j-1] == slic[i][j] and slic[i-1][j] == slic[i][j] and label[i][j-1] != label[i-1][j]:
+                    #if two composants can combine
                     index_min, index_max = min(label[i][j-1], label[i-1][j]), max(label[i][j-1], label[i-1][j])
                     if index_min != -1 and index_min != index_max:
                         for point in self.dic_content[index_max]:
@@ -210,17 +219,45 @@ class graph:
                         self.combine_index(index_max, index_min)
         return label
     
+    def translate_2_label_matrix(self, im):
+        height, weight = im.shape
+        mat = np.ones((height, weight)).astype(np.int32)
+        for i in self.dic_content:
+            for j in self.dic_content[i]:
+                mat[j[0],j[1]] = i
+        return mat
+    
     def sum_of_element(self):
         l = {}
         for j in self.dic_content:
             l[j] = len(self.dic_content[j])
         return l
-    
-#%% test part
+#%% post-processing
+def simple_processing(graph, threshold = 30):
+    l = sorted(graph.dic_content, reverse=True)
+    for i in l:
+        if len(graph.dic_content[i])<threshold:
+            graph.combine_index(i,graph.dic_neigh[i][0])
+#%% test slic
 # np.set_printoptions(threshold=np.inf)
 # print(SLIC("luangai.jpg", 100, 10))
-slic,im = show_segmentation("lena_petit.tif", k=100, m=30)
+k = 100
+m = 30
+threshold = 0.1
+filename = "lena_petit.tif"
+slic = SLIC(filename, k=k, m=m, threshold=threshold)
+np.save(filename[:-3]+'npy', slic)  
+savename = filename[:-4]+'_'+'slic_'+str(k)+'_'+str(m)+'_'+str(threshold)+filename[-4:]
+im = show_segmentation(filename, savename, slic, show_im=True)
+#%% test graph
 #a = np.array([[1,0,1,0,2],[1,0,1,0,2],[1,1,1,2,2]])
+filename = "lena_petit.tif"
+slic = np.load(filename[:-3]+'npy')
 slic_graph = graph()
 im_graph = slic_graph.generate_graph(slic)
+show_segmentation(filename, filename[:-4]+'_graph'+filename[-4:], im_graph, show_im=True)
 #im_graph = slic_graph.generate_graph(a)
+#%% test post-processing
+simple_processing(slic_graph)
+res = slic_graph.translate_2_label_matrix(slic)
+show_segmentation(filename, filename[:-4]+'_post_processing'+filename[-4:], res, show_im=True)
