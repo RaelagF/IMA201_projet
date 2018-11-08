@@ -3,6 +3,9 @@
 import numpy as np
 import cv2
 import math
+import pickle
+import os
+os.chdir("C:\\Users\\limit\\Desktop\\IMA_PROJET\\IMA201_PROJET")
 
 
 def mixed_distance(X1, X2, S, m):
@@ -108,21 +111,24 @@ def SLIC(filename, k, m, threshold=0.1):
     return l
 
 
-def show_segmentation(filename, savename, l, show_im=False):
+def show_segmentation(filename, savename, l, show_im=False, white=False, color = [0,0,0]):
 
     # turn pixels on the bords to black
     height, weight = l.shape
     im = cv2.imread(filename)
+    
+    if white:
+        im[:] = 255
 
     for j in range(1, height):
         for i in range(0, weight):
             if (l[j, i] != l[j-1, i]):
-                im[j, i, :] = [0, 0, 0]
+                im[j, i, :] = color
 
     for j in range(0, height):
         for i in range(1, weight):
             if (l[j, i] != l[j, i-1]):
-                im[j, i, :] = [0, 0, 0]
+                im[j, i, :] = color
 
     cv2.imwrite(savename, im)
     if show_im:
@@ -134,12 +140,15 @@ def show_segmentation(filename, savename, l, show_im=False):
 
 #%% class graph
 class graph:
-    def __init__(self):
+    def __init__(self, filename = None):
         
         #dict of graph index
         self.dic_content = {}
         #dict of graph neighbour
         self.dic_neigh = {}
+        
+        self.filename = filename
+        self.im = cv2.imread(filename)
         
     #a fonction add content to graph
     def add_content(self, position, index):
@@ -219,45 +228,108 @@ class graph:
                         self.combine_index(index_max, index_min)
         return label
     
-    def translate_2_label_matrix(self, im):
-        height, weight = im.shape
+    def translate_2_label_matrix(self):
+        height, weight, _ = self.im.shape
         mat = np.ones((height, weight)).astype(np.int32)
         for i in self.dic_content:
             for j in self.dic_content[i]:
                 mat[j[0],j[1]] = i
         return mat
     
-    def sum_of_element(self):
+    def count_of_element(self):
         l = {}
         for j in self.dic_content:
             l[j] = len(self.dic_content[j])
         return l
+    
+    def index_distance(self, index1, index2):
+        center1 = np.average(self.dic_content[index1], axis=0)
+        center2 = np.average(self.dic_content[index2], axis=0)
+        return np.linalg.norm(center1-center2)
+    
+    def index_mixed_distance(self, index1, index2, factor):
+        im_Lab = cv2.cvtColor(self.im, cv2.COLOR_BGR2Lab)
+        X1f = np.average(list(map(lambda x:im_Lab[x[0],x[1]],self.dic_content[index1])),axis=0)
+        X1r = np.average(self.dic_content[index1],axis=0)
+        X1 = np.concatenate((X1f,X1r))
+        X2f = np.average(list(map(lambda x:im_Lab[x[0],x[1]],self.dic_content[index2])),axis=0)
+        X2r = np.average(self.dic_content[index2],axis=0)
+        X2 = np.concatenate((X2f,X2r))
+        return mixed_distance(X1, X2, 1, factor)
+    
+    def graph_save(self, savename):
+        f = open(savename, 'wb')
+        pickle.dump([self.dic_content,self.dic_neigh,self.filename,self.im],f)
+        f.close()
+        
+    def graph_load(self, filename):
+        f = open(filename, 'rb')
+        [self.dic_content,self.dic_neigh,self.filename,self.im] = pickle.load(f)
+        f.close()
 #%% post-processing
 def simple_processing(graph, threshold = 30):
     l = sorted(graph.dic_content, reverse=True)
     for i in l:
         if len(graph.dic_content[i])<threshold:
             graph.combine_index(i,graph.dic_neigh[i][0])
+
+def distance_based_processing(graph, threshold = 30):
+    l = sorted(graph.dic_content, reverse=True)
+    for i in l:
+        if len(graph.dic_content[i])<threshold:
+            k = min(graph.dic_neigh[i], key=lambda x: graph.index_distance(i,x))
+            graph.combine_index(i,k)
+#%% Segmentation
+def gathering(graph, threshold):
+    flag = 1
+    factor = 0
+    while flag:
+        flag = 0
+        l = sorted(graph.dic_content, reverse=True)
+        for i in l:
+            k = min(graph.dic_neigh[i], key=lambda x: graph.index_mixed_distance(i,x,factor))
+            print(graph.index_mixed_distance(i,k,factor))
+            if graph.index_mixed_distance(i,k,factor)<threshold:
+                graph.combine_index(i,k)
+                flag = 1
 #%% test slic
 # np.set_printoptions(threshold=np.inf)
 # print(SLIC("luangai.jpg", 100, 10))
 k = 100
 m = 30
 threshold = 0.1
-filename = "lena_petit.tif"
+filename = "test.png"
 slic = SLIC(filename, k=k, m=m, threshold=threshold)
 np.save(filename[:-3]+'npy', slic)  
 savename = filename[:-4]+'_'+'slic_'+str(k)+'_'+str(m)+'_'+str(threshold)+filename[-4:]
 im = show_segmentation(filename, savename, slic, show_im=True)
-#%% test graph
+#%% graph
+'''
+test graph
 #a = np.array([[1,0,1,0,2],[1,0,1,0,2],[1,1,1,2,2]])
-filename = "lena_petit.tif"
+filename = "girl.jpg"
 slic = np.load(filename[:-3]+'npy')
 slic_graph = graph()
 im_graph = slic_graph.generate_graph(slic)
 show_segmentation(filename, filename[:-4]+'_graph'+filename[-4:], im_graph, show_im=True)
 #im_graph = slic_graph.generate_graph(a)
+'''
+filename = "test.png"
+slic = np.load(filename[:-3]+'npy')
+slic_graph = graph(filename)
+im_graph = slic_graph.generate_graph(slic)
+slic_graph.graph_save(filename[:-3]+'pkl')
 #%% test post-processing
-simple_processing(slic_graph)
-res = slic_graph.translate_2_label_matrix(slic)
-show_segmentation(filename, filename[:-4]+'_post_processing'+filename[-4:], res, show_im=True)
+#simple_processing(slic_graph)
+new_graph = graph()
+new_graph.graph_load(filename[:-3]+'pkl')
+distance_based_processing(new_graph)
+res = new_graph.translate_2_label_matrix()
+im_seg = show_segmentation(filename, filename[:-4]+'_post_processing'+filename[-4:], res, show_im=True)
+im_seg = show_segmentation(filename, filename[:-4]+'_post_processing_white'+filename[-4:], res, show_im=True, white=True)
+#%% test gathering
+for i in range(10,55,5):
+    gathering(new_graph, i)
+    res = new_graph.translate_2_label_matrix()
+    im_seg = show_segmentation(filename, filename[:-4]+'_gathering_' + str(i) + filename[-4:], res, show_im=False, color=[255,255,255])
+    im_seg = show_segmentation(filename, filename[:-4]+'_gathering_white_' + str(i) + filename[-4:], res, show_im=False, white=True)
