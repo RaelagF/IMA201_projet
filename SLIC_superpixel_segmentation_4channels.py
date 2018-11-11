@@ -10,26 +10,30 @@ def mixed_distance(X1, X2, S, m):
     # X1, X2: two vectors of the form [lk, ak, bk, yk, xk]
     # S: length in the SLIC algorithm
     # m: allows to weigh the relative importance between color
-    li, ai, bi, yi, xi = X1
-    lj, aj, bj, yj, xj = X2
+    ri, gi, bi, rii, yi, xi = X1
+    rj, gj, bj, rij, yj, xj = X2
 
-    dc_square = (lj-li)**2 + (aj-ai)**2 + (bj-bi)**2
+    dc_square = (rj-ri)**2 + (gj-gi)**2 + (bj-bi)**2 + (rij-rii)**2
     ds_square = (xj-xi)**2 + (yj-yi)**2
 
     distance = math.sqrt(dc_square + ds_square * (m**2) / (S**2))
     return distance
 
 
-def SLIC(filename, k, m, threshold=0.1):
+def SLIC_4channels(filenameR, filenameG, filenameB, filenameIR, k, m, threshold=0.1):
     # k: number of clusters
     # m: allows to weigh the relative importance between color
     # similarity and spatial proximity
     # threshold: stop the iterations when the error_improvement <= threshold
     # returns a matrix for clustering labels and the number of clusters
 
-    im = cv2.imread(filename)
-    height, weight, num_channels = im.shape
-    im_Lab = cv2.cvtColor(im, cv2.COLOR_BGR2Lab)
+    imR = cv2.imread(filenameR)[:,:,0]
+    imG = cv2.imread(filenameG)[:,:,0]
+    imB = cv2.imread(filenameB)[:,:,0]
+    imIR = cv2.imread(filenameIR)[:,:,0]
+    im = np.stack((imR, imG, imB, imIR), axis = 2)
+
+    height, weight = imR.shape
     N = height * weight
     S = int(math.sqrt(N/k))
 
@@ -43,25 +47,25 @@ def SLIC(filename, k, m, threshold=0.1):
     x_aux = (np.arange(0.5, w_, 1) * S).astype(np.int32)
     for j in y_aux:
         for i in x_aux:
-            C = list(im_Lab[j, i])  # each cluster center
+            C = list(im[j, i])  # each cluster center
             C.extend([j, i])
             Ck.append(C)
     Ck = np.array(Ck)
 
     # move cluster centers to the lowest gradient position in a 3 * 3 neighborhood
-    im_GRAY = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+    im_GRAY = np.average(im, axis = 2)
     # laplacian = cv2.Laplacian(im_GRAY, cv2.CV_64F)
     gradient = cv2.Sobel(im_GRAY, ddepth=-1, dx=1, dy=1)
     print (gradient.shape)
     for C in Ck:
-        y, x = C[3:5]
+        y, x = C[4:6]
         min_gradient = gradient[y, x]
         for j in range(3):
             for i in range(3):
                 if (gradient[y-1+j, x-1+i] < min_gradient):
                     min_gradient = gradient[y-1+j, x-1+i]
-                    C[3:5] = y-1+i, x-1+j
-        C[:3] = im_Lab[C[3], C[4]]
+                    C[4:6] = y-1+i, x-1+j
+        C[:4] = im[C[4], C[5]]
 
     # initialize the label and the distance matrix
     l = (-1) * np.ones((height, weight)).astype(np.int32)  # label
@@ -75,10 +79,10 @@ def SLIC(filename, k, m, threshold=0.1):
     while (error_improvement > threshold):
         print(iter_cnt)
         for (cluster_label, C) in enumerate(Ck):
-            y, x = C[3:5]
+            y, x = C[4:6]
             for j in range(max(0, y-S), min(height, y+S)):
                 for i in range(max(0, x-S), min(weight, x+S)):
-                    tmp_vector = np.concatenate((im_Lab[j, i], [j, i]))
+                    tmp_vector = np.concatenate((im[j, i], [j, i]))
                     D = mixed_distance(C, tmp_vector, S, m)
                     if (D < d[j, i]):
                         d[j, i] = D
@@ -92,7 +96,7 @@ def SLIC(filename, k, m, threshold=0.1):
             for j in range(height):
                 for i in range(weight):
                     if (l[j, i] == cluster_label):
-                        tmp_vector = np.concatenate((im_Lab[j, i], [j, i]))
+                        tmp_vector = np.concatenate((im[j, i], [j, i]))
                         cluster.append(tmp_vector)
             new_C = np.average(cluster, axis=0)
             E = E + np.linalg.norm(C - new_C, ord=2)
@@ -138,5 +142,5 @@ def show_segmentation(filename, savename, l, show_im=False, white=False, color=[
     return im
 
 
-l = SLIC("extraitBGR.tif", 50, 20)
-show_segmentation("extraitBGR.tif", "tmp_3channels.jpg", l)
+l = SLIC_4channels("extraitR.tif", "extraitG.tif", "extraitB.tif", "extraitIR.tif", 50, 20)
+show_segmentation("extraitBGR.tif", "tmp_4channels.tif", l)
