@@ -133,10 +133,6 @@ def show_segmentation(filename, savename, l, show_im=False, white=False, color=[
     if show_im:
         cv2.namedWindow("Segmentation")
         cv2.imshow("Segmentation", im)
-    cv2.waitKey(0)
+        cv2.waitKey(0)
 
     return im
-
-
-l = SLIC("extraitBGR.tif", 50, 20)
-show_segmentation("extraitBGR.tif", "tmp_3channels.jpg", l)
