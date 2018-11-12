@@ -2,7 +2,7 @@
 # %% Segmentation
 
 
-def gathering(graph, threshold):
+def fusion(graph, threshold):
     flag = 1
     factor = 0
     while flag:
